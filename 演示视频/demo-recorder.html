@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>个人博客 CMS 演示视频录制</title>
+  <style>
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #edf4fb;
+      font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    }
+
+    canvas {
+      display: block;
+      height: 720px;
+      width: 1280px;
+    }
+  </style>
+</head>
+<body>
+<canvas id="stage" width="1280" height="720"></canvas>
+<script>
+const canvas = document.getElementById("stage");
+const ctx = canvas.getContext("2d");
+const width = canvas.width;
+const height = canvas.height;
+const durationSeconds = 142;
+const fps = 30;
+const mimeType = MediaRecorder.isTypeSupported('video/mp4;codecs="avc1.42E01E"')
+  ? 'video/mp4;codecs="avc1.42E01E"'
+  : "video/mp4";
+
+const scenes = [
+  { start: 0, end: 12, title: "个人博客 CMS 系统", subtitle: "Vue 3 + TypeScript + Vite 结课项目演示", mode: "cover" },
+  { start: 12, end: 28, title: "用户场景模拟", subtitle: "访客进入首页，浏览技术文章、分类标签和每日一句", mode: "home" },
+  { start: 28, end: 45, title: "核心功能一：文章阅读", subtitle: "文章详情支持目录导航、图片自适应、点赞、收藏和评论", mode: "article" },
+  { start: 45, end: 60, title: "核心功能二：检索与筛选", subtitle: "通过关键词、分类、标签快速定位内容", mode: "search" },
+  { start: 60, end: 78, title: "核心功能三：用户中心", subtitle: "登录用户可以查看收藏、点赞、评论和个人资料", mode: "user" },
+  { start: 78, end: 96, title: "后台管理：仪表盘", subtitle: "管理员查看文章、评论、分类、标签和发布趋势", mode: "dashboard" },
+  { start: 96, end: 114, title: "后台管理：内容维护", subtitle: "文章编辑、媒体库、分类标签、评论留言审核", mode: "admin" },
+  { start: 114, end: 130, title: "技术亮点讲解", subtitle: "Axios 拦截器、路由守卫、Pinia 状态管理、TypeScript 类型定义", mode: "tech" },
+  { start: 130, end: 142, title: "演示总结", subtitle: "项目满足 Vue3、TypeScript、Vite、Axios/JSON 数据交互和答辩展示要求", mode: "ending" }
+];
+
+function ease(value) {
+  return 1 - Math.pow(1 - value, 3);
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function roundedRect(x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+function fillRound(x, y, w, h, r, color) {
+  ctx.fillStyle = color;
+  roundedRect(x, y, w, h, r);
+  ctx.fill();
+}
+
+function strokeRound(x, y, w, h, r, color, lineWidth = 1) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  roundedRect(x, y, w, h, r);
+  ctx.stroke();
+}
+
+function text(value, x, y, size = 28, color = "#102033", weight = 500, align = "left") {
+  ctx.fillStyle = color;
+  ctx.font = `${weight} ${size}px "Microsoft YaHei", "Segoe UI", sans-serif`;
+  ctx.textAlign = align;
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(value, x, y);
+}
+
+function paragraph(lines, x, y, size = 24, color = "#475569", lineHeight = 38) {
+  lines.forEach((line, index) => text(line, x, y + index * lineHeight, size, color, 500));
+}
+
+function background(t) {
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, "#d8ebff");
+  gradient.addColorStop(0.48, "#f7fbff");
+  gradient.addColorStop(1, "#f8e8ff");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.ellipse(188 + Math.sin(t / 7) * 16, 100, 260, 90, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(1080, 82 + Math.cos(t / 8) * 10, 230, 86, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function header(t) {
+  fillRound(38, 24, 900, 78, 24, "rgba(255,255,255,0.78)");
+  strokeRound(38, 24, 900, 78, 24, "rgba(255,255,255,0.88)");
+  fillRound(62, 44, 38, 38, 12, "#0a84ff");
+  text("个人博客", 116, 70, 20, "#0f172a", 800);
+  const items = ["首页", "搜索", "收藏", "专题", "归档", "友链", "留言板", "关于", "登录", "后台"];
+  items.forEach((item, index) => {
+    const x = 272 + index * 62;
+    if (index === Math.floor((t / 6) % items.length)) fillRound(x - 10, 42, 56, 34, 17, "#e8f3ff");
+    text(item, x, 65, 15, "#334155", index === Math.floor((t / 6) % items.length) ? 800 : 500);
+  });
+  fillRound(982, 38, 180, 52, 26, "rgba(255,255,255,0.82)");
+  text("中  EN", 1010, 70, 15, "#0f172a", 800);
+  text("日  夜间", 1080, 70, 15, "#0f172a", 800);
+}
+
+function browserFrame(title) {
+  fillRound(88, 120, 1104, 520, 18, "rgba(255,255,255,0.84)");
+  strokeRound(88, 120, 1104, 520, 18, "rgba(148,163,184,0.35)");
+  fillRound(88, 120, 1104, 46, 18, "#eef6ff");
+  ctx.fillStyle = "#ff5f57"; ctx.beginPath(); ctx.arc(116, 143, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#febc2e"; ctx.beginPath(); ctx.arc(136, 143, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#28c840"; ctx.beginPath(); ctx.arc(156, 143, 6, 0, Math.PI * 2); ctx.fill();
+  text(title, 190, 149, 17, "#334155", 700);
+}
+
+function drawArticleCard(x, y, title, tag, color) {
+  fillRound(x, y, 300, 150, 12, "#ffffff");
+  strokeRound(x, y, 300, 150, 12, "rgba(148,163,184,0.22)");
+  fillRound(x + 18, y + 18, 74, 28, 14, color);
+  text(tag, x + 30, y + 38, 14, "#ffffff", 700);
+  text(title, x + 18, y + 78, 22, "#0f172a", 800);
+  paragraph(["摘要展示文章核心内容", "阅读 128 · 点赞 24"], x + 18, y + 110, 15, "#64748b", 24);
+}
+
+function homeScene(t, p) {
+  browserFrame("前台首页 / 首页文章流");
+  text("记录技术、项目与持续成长", 132, 218, 42, "#0f172a", 900);
+  paragraph(["用户打开首页后，可以浏览最新文章、分类标签和站点信息。", "顶部支持搜索、收藏、专题、归档、友链、留言板等入口。"], 132, 260, 22);
+  drawArticleCard(132, 346, "Vue3 项目实战", "Vue", "#0a84ff");
+  drawArticleCard(470, 346, "Axios 请求封装", "接口", "#34c759");
+  drawArticleCard(808, 346, "博客 CMS 设计", "CMS", "#ff9500");
+  const x = 132 + ease(p) * 740;
+  fillRound(x, 542, 146, 42, 21, "#0f172a");
+  text("点击阅读", x + 34, 570, 18, "#ffffff", 800);
+}
+
+function articleScene(t, p) {
+  browserFrame("文章详情 / 阅读与互动");
+  text("Mimo-v2.5-pro 性能提升详解", 132, 216, 38, "#0f172a", 900);
+  paragraph(["文章详情页支持 Markdown 内容、图片自适应、右侧目录导航。", "用户可进行点赞、收藏、评论，长文章目录会自动跟随高亮。"], 132, 260, 21);
+  fillRound(132, 342, 610, 210, 8, "#fff3c4");
+  text("正文图片保持在阅读区域内，不会遮挡右侧目录", 174, 460, 24, "#8a4b00", 800);
+  fillRound(788, 214, 250, 340, 8, "rgba(255,255,255,0.78)");
+  ["引言", "主要优化点", "1. 推理速度提升", "2. 资源占用优化", "3. 多语言处理", "结论"].forEach((item, index) => {
+    if (index === Math.floor(1 + p * 4)) fillRound(810, 248 + index * 42, 206, 30, 8, "#dbeeff");
+    text(item, 824, 270 + index * 42, 16, "#334155", index === Math.floor(1 + p * 4) ? 800 : 500);
+  });
+}
+
+function searchScene(t, p) {
+  browserFrame("搜索与分类筛选");
+  fillRound(132, 204, 740, 58, 29, "#ffffff");
+  text("输入关键词：Vue3 / Axios / 博客", 166, 242, 22, "#64748b", 600);
+  fillRound(896, 204, 130, 58, 29, "#0a84ff");
+  text("搜索", 940, 242, 22, "#ffffff", 800);
+  const tags = ["全部", "Vue3", "TypeScript", "Axios", "移动端", "CMS"];
+  tags.forEach((tag, index) => {
+    fillRound(132 + index * 126, 300, 104, 38, 19, index === 2 ? "#dbeeff" : "#ffffff");
+    text(tag, 164 + index * 126, 325, 17, "#334155", index === 2 ? 800 : 500);
+  });
+  drawArticleCard(132, 382, "TypeScript 类型定义", "TS", "#0a84ff");
+  drawArticleCard(470, 382, "Vue Router 权限守卫", "路由", "#34c759");
+  drawArticleCard(808, 382, "Pinia 状态管理", "状态", "#ff9500");
+}
+
+function userScene(t, p) {
+  browserFrame("用户中心 / 互动数据");
+  fillRound(132, 210, 260, 330, 14, "#ffffff");
+  fillRound(212, 244, 96, 96, 48, "#dbeeff");
+  text("读者用户", 200, 386, 26, "#0f172a", 900);
+  paragraph(["收藏 12 篇", "点赞 35 次", "评论 8 条"], 190, 430, 20);
+  fillRound(440, 214, 580, 70, 12, "#f8fafc");
+  fillRound(440, 314, 580, 70, 12, "#f8fafc");
+  fillRound(440, 414, 580, 70, 12, "#f8fafc");
+  text("我的收藏：Vue3 博客 CMS 架构设计", 470, 258, 22, "#0f172a", 800);
+  text("我的点赞：Axios 请求封装实践", 470, 358, 22, "#0f172a", 800);
+  text("我的评论：这篇文章对项目很有帮助", 470, 458, 22, "#0f172a", 800);
+}
+
+function dashboardScene(t, p) {
+  browserFrame("后台仪表盘 / 数据统计");
+  const cards = [["文章", "42"], ["已发布", "31"], ["分类", "8"], ["标签", "16"], ["待审评论", "5"], ["用户", "23"]];
+  cards.forEach((card, index) => {
+    const x = 132 + (index % 3) * 200;
+    const y = 204 + Math.floor(index / 3) * 116;
+    fillRound(x, y, 168, 84, 12, "#ffffff");
+    text(card[0], x + 22, y + 32, 17, "#64748b", 600);
+    text(card[1], x + 22, y + 66, 32, "#0f172a", 900);
+  });
+  fillRound(760, 204, 300, 230, 12, "#ffffff");
+  text("近 30 天发布趋势", 792, 242, 20, "#0f172a", 800);
+  ctx.strokeStyle = "#0a84ff"; ctx.lineWidth = 4; ctx.beginPath();
+  for (let i = 0; i < 9; i++) {
+    const x = 794 + i * 28;
+    const y = 374 - Math.sin(i + p * 3) * 42 - i * 6;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  fillRound(760, 466, 300, 80, 12, "#edf8ff");
+  text("图表由 computed 派生数据生成", 792, 516, 19, "#0f172a", 800);
+}
+
+function adminScene(t, p) {
+  browserFrame("后台管理 / 内容维护");
+  const nav = ["文章管理", "分类管理", "标签管理", "评论审核", "媒体库", "站点设置"];
+  nav.forEach((item, index) => {
+    fillRound(132, 202 + index * 54, 170, 38, 10, index === Math.floor(p * nav.length) ? "#dbeeff" : "#ffffff");
+    text(item, 156, 228 + index * 54, 17, "#334155", 700);
+  });
+  fillRound(340, 202, 690, 340, 14, "#ffffff");
+  text("新增 / 编辑文章", 378, 254, 30, "#0f172a", 900);
+  paragraph(["标题、摘要、封面、分类、标签、Markdown 正文", "媒体库支持上传图片，评论留言支持审核回复", "站点设置可以维护 Logo、头像、首页文案和路线图"], 378, 306, 22, "#475569", 42);
+  fillRound(378, 462, 136, 46, 23, "#0a84ff");
+  text("保存文章", 406, 492, 20, "#ffffff", 800);
+}
+
+function techScene(t, p) {
+  browserFrame("技术亮点 / 核心代码逻辑");
+  const blocks = [
+    ["Axios 统一封装", "baseURL=/api，请求拦截器自动携带 Token，响应拦截器统一处理异常。"],
+    ["Vue Router 路由守卫", "访问后台页面时检查管理员 Token，未登录自动跳转登录页。"],
+    ["TypeScript 类型定义", "Article、Category、Tag、Comment、SiteSetting 等数据结构清晰。"],
+    ["Pinia 状态管理", "保存管理员、前台用户和后台布局状态，降低组件耦合。"]
+  ];
+  blocks.forEach((block, index) => {
+    const y = 200 + index * 88;
+    fillRound(142, y, 880, 66, 12, index === Math.floor(p * blocks.length) ? "#e8f3ff" : "#ffffff");
+    text(block[0], 172, y + 28, 22, "#0f172a", 900);
+    text(block[1], 172, y + 54, 16, "#475569", 500);
+  });
+}
+
+function coverScene(scene, t, p) {
+  text(scene.title, 96, 282, 64, "#0f172a", 900);
+  paragraph([scene.subtitle, "演示视频规格：MP4 / H.264 / 1280×720 / 2-4 分钟 / 带字幕"], 100, 336, 26);
+  fillRound(100, 444, 230, 54, 27, "#0a84ff");
+  text("开始演示", 156, 479, 24, "#ffffff", 900);
+  fillRound(372, 444, 310, 54, 27, "#ffffff");
+  text("个人博客 CMS 系统", 414, 479, 24, "#0f172a", 900);
+}
+
+function endingScene(scene) {
+  text(scene.title, 100, 280, 58, "#0f172a", 900);
+  paragraph([
+    "项目完成了前台访问、后台管理、用户互动和站点配置。",
+    "符合课程对 Vue3、TypeScript、Vite、Axios 网络请求和 JSON 数据交互的要求。",
+    "答辩时可重点展示 ArticleDetail、Dashboard、http.ts 与 router/index.ts。"
+  ], 104, 338, 25, "#334155", 44);
+}
+
+function subtitle(scene) {
+  fillRound(90, 644, 1100, 48, 24, "rgba(15,23,42,0.84)");
+  text("字幕：" + scene.subtitle, 124, 675, 22, "#ffffff", 800);
+}
+
+function render(time) {
+  const scene = scenes.find(item => time >= item.start && time < item.end) ?? scenes[scenes.length - 1];
+  const local = time - scene.start;
+  const progress = clamp(local / (scene.end - scene.start), 0, 1);
+  background(time);
+  header(time);
+  if (scene.mode === "cover") coverScene(scene, time, progress);
+  if (scene.mode === "home") homeScene(time, progress);
+  if (scene.mode === "article") articleScene(time, progress);
+  if (scene.mode === "search") searchScene(time, progress);
+  if (scene.mode === "user") userScene(time, progress);
+  if (scene.mode === "dashboard") dashboardScene(time, progress);
+  if (scene.mode === "admin") adminScene(time, progress);
+  if (scene.mode === "tech") techScene(time, progress);
+  if (scene.mode === "ending") endingScene(scene);
+  subtitle(scene);
+}
+
+window.renderDone = new Promise((resolve, reject) => {
+  const stream = canvas.captureStream(fps);
+  const recorder = new MediaRecorder(stream, {
+    mimeType,
+    videoBitsPerSecond: 4200000
+  });
+  const chunks = [];
+  recorder.ondataavailable = event => {
+    if (event.data && event.data.size) chunks.push(event.data);
+  };
+  recorder.onerror = event => reject(event.error || event);
+  recorder.onstop = () => {
+    const blob = new Blob(chunks, { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "个人博客CMS演示视频.mp4";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    resolve({ size: blob.size, mimeType });
+  };
+
+  const start = performance.now();
+  recorder.start(1000);
+  const timer = setInterval(() => {
+    const elapsed = (performance.now() - start) / 1000;
+    render(Math.min(elapsed, durationSeconds - 0.01));
+    if (elapsed >= durationSeconds) {
+      clearInterval(timer);
+      render(durationSeconds - 0.01);
+      recorder.stop();
+    }
+  }, 1000 / fps);
+});
+</script>
+</body>
+</html>

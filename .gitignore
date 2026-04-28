@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+target/
+**/target/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# IDE and system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs and caches
+*.log
+.cache/
+.vite/
+.edge-profile/
+**/.edge-profile/
+
+# Temporary helper scripts
+tmp-*.cjs
+**/tmp-*.cjs
+
+# Generated packages
+*.zip
+
+# Runtime uploads
+uploads/
+**/uploads/
+!**/uploads/.gitkeep
