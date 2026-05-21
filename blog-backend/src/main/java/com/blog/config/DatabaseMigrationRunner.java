@@ -46,6 +46,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         seedAiData();
         backfillPublishedAt();
         insertDemoData();
+        addPerformanceIndexes();
     }
 
     private void createAdminAccountTable() {
@@ -305,6 +306,54 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         if (count == null || count == 0) {
             jdbcTemplate.execute(alterSql);
         }
+    }
+
+    /**
+     * Idempotent index creation. MySQL does not support
+     * {@code CREATE INDEX IF NOT EXISTS} on every server version, so we
+     * inspect {@code information_schema.statistics} first.
+     */
+    private void addIndexIfMissing(String tableName, String indexName, String createIndexSql) {
+        Integer count = jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(*)
+            FROM information_schema.statistics
+            WHERE table_schema = DATABASE()
+              AND table_name = ?
+              AND index_name = ?
+            """,
+            Integer.class,
+            tableName,
+            indexName
+        );
+        if (count == null || count == 0) {
+            jdbcTemplate.execute(createIndexSql);
+        }
+    }
+
+    /**
+     * Adds covering indexes that the existing MyBatis mappers benefit from.
+     *
+     * <p>None of these change query semantics. They speed up two hot paths:
+     * the article listing pages (filter by {@code is_deleted/status} and
+     * order by {@code published_at} or {@code updated_at}), and the
+     * comment-count correlated subquery that runs once per article in every
+     * listing query.</p>
+     *
+     * <p>The indexes are added here rather than in {@code schema.sql} so
+     * that pre-existing databases are upgraded transparently. After the
+     * project moves to Flyway these calls should migrate to a versioned
+     * SQL migration.</p>
+     */
+    private void addPerformanceIndexes() {
+        addIndexIfMissing("blog_article", "idx_blog_article_listing",
+            "CREATE INDEX idx_blog_article_listing ON blog_article (is_deleted, status, is_pinned, published_at)");
+        addIndexIfMissing("blog_article", "idx_blog_article_admin_listing",
+            "CREATE INDEX idx_blog_article_admin_listing ON blog_article (is_deleted, status, is_pinned, updated_at)");
+        addIndexIfMissing("blog_article", "idx_blog_article_category",
+            "CREATE INDEX idx_blog_article_category ON blog_article (category_id, is_deleted, status)");
+        addIndexIfMissing("blog_comment", "idx_blog_comment_article_status",
+            "CREATE INDEX idx_blog_comment_article_status ON blog_comment (article_id, status, is_deleted)");
     }
 
     private void insertDemoData() {
