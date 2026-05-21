@@ -2,3 +2,6 @@
 uploads/
 !uploads/.gitkeep
 
+# Local / production overrides must never be committed.
+src/main/resources/application-local.yml
+src/main/resources/application-prod.yml

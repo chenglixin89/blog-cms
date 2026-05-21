@@ -1,0 +1,19 @@
+# Local-development profile. Activated by default (see application.yml -> spring.profiles.default).
+#
+# These defaults intentionally use weak credentials so that `mvn spring-boot:run`
+# still works out of the box on a fresh clone. NEVER use this profile in production.
+
+spring:
+  datasource:
+    password: ${BLOG_DB_PASSWORD:123456}
+
+blog:
+  cors:
+    allowed-origins: ${BLOG_CORS_ALLOWED_ORIGINS:*}
+  auth:
+    admin:
+      # Used only the FIRST time the database is seeded. After that, the value
+      # in blog_admin_account.password_hash takes over.
+      password: ${BLOG_ADMIN_PASSWORD:admin123}
+  jwt:
+    secret: ${BLOG_JWT_SECRET:dev-only-secret-key-please-change-it-at-least-32-bytes-long}

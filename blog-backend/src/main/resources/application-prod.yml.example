@@ -1,0 +1,38 @@
+# Production profile template.
+#
+# Either:
+#   1. Copy this file to application-prod.yml (already in .gitignore) and fill in
+#      real values, then start the app with -Dspring.profiles.active=prod, OR
+#   2. Provide all the BLOG_* environment variables and start the app with
+#      SPRING_PROFILES_ACTIVE=prod (no application-prod.yml needed).
+#
+# All values without a default cause Spring Boot to fail fast on startup if missing,
+# which is the intended safety behaviour for production.
+
+spring:
+  datasource:
+    url: ${BLOG_DB_URL}
+    username: ${BLOG_DB_USERNAME}
+    password: ${BLOG_DB_PASSWORD}
+  sql:
+    init:
+      # Production should manage schema with proper migrations (see roadmap: Flyway),
+      # not by re-running schema.sql on every boot.
+      mode: never
+
+blog:
+  cors:
+    # Comma-separated list of fully qualified origins (no wildcards in production).
+    # Example: https://blog.example.com,https://www.example.com
+    allowed-origins: ${BLOG_CORS_ALLOWED_ORIGINS}
+  auth:
+    admin:
+      username: ${BLOG_ADMIN_USERNAME}
+      # Used only when the database is empty. Pick a strong password; it will be
+      # hashed with BCrypt before being persisted.
+      password: ${BLOG_ADMIN_PASSWORD}
+  jwt:
+    # MUST be at least 32 bytes of high-entropy random material.
+    # Generate with: openssl rand -base64 48
+    secret: ${BLOG_JWT_SECRET}
+    expire-seconds: ${BLOG_JWT_EXPIRE_SECONDS:7200}
