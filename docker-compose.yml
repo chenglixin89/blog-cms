@@ -1,0 +1,75 @@
+# =====================================================================
+# blog-cms local Docker setup.
+#
+# Brings up MySQL 8 + the Spring Boot backend in one command:
+#
+#   docker compose up --build
+#
+# The first boot takes a minute (Maven downloads dependencies, MySQL
+# initialises, Flyway/legacy migration runs). Once it's up:
+#
+#   - Backend:  http://localhost:8080
+#   - MySQL:    localhost:3306  (user: blog / password: blog by default)
+#
+# Override anything by copying .env.example to .env and editing values.
+#
+# Frontend is intentionally NOT included here: it deploys to GitHub Pages
+# via .github/workflows/deploy-frontend.yml. For local frontend dev, run
+# `npm run dev` inside blog-frontend/ and point it at this backend.
+# =====================================================================
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: blog-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-blog_cms}
+      MYSQL_USER: ${MYSQL_USER:-blog}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-blog}
+    ports:
+      - "${MYSQL_HOST_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping -h 127.0.0.1 -u root -p"$$MYSQL_ROOT_PASSWORD" --silent
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./blog-backend
+    container_name: blog-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # Spring Boot picks up these env vars via relaxed binding; they override
+      # whatever is in application.yml.
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-blog_cms}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-blog}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-blog}
+      BLOG_JWT_SECRET: ${BLOG_JWT_SECRET:-docker-compose-only-secret-change-me-at-least-32-bytes-long}
+      BLOG_JWT_EXPIRE_SECONDS: ${BLOG_JWT_EXPIRE_SECONDS:-7200}
+      BLOG_AUTH_ADMIN_USERNAME: ${BLOG_AUTH_ADMIN_USERNAME:-admin}
+      BLOG_AUTH_ADMIN_PASSWORD: ${BLOG_AUTH_ADMIN_PASSWORD:-admin123}
+      BLOG_AUTH_ADMIN_NICKNAME: ${BLOG_AUTH_ADMIN_NICKNAME:-Admin}
+      BLOG_UPLOAD_DIR: /app/uploads
+    ports:
+      - "${BACKEND_HOST_PORT:-8080}:8080"
+    volumes:
+      - blog_uploads:/app/uploads
+
+volumes:
+  mysql_data:
+  blog_uploads:
