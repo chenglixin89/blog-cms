@@ -1,0 +1,19 @@
+target/
+.idea/
+.vscode/
+*.iml
+.git/
+.gitignore
+.DS_Store
+
+# Local-only / generated config
+src/main/resources/application-local.yml
+src/main/resources/application-prod.yml
+
+# Runtime uploads must not bake into the image
+uploads/
+**/uploads/
+
+# Anything that shouldn't influence the build context
+*.log
+README.md
