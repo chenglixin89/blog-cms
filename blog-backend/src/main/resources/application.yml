@@ -34,3 +34,21 @@ blog:
     secret: "this-is-a-demo-secret-key-change-it-at-least-32-chars"
     expire-seconds: 7200
 
+
+# OpenAPI / Swagger UI (springdoc). Documentation is generated automatically
+# from the controllers; the paths below stay outside /api/admin so they are
+# unaffected by the admin JWT interceptor (i.e. they remain public). If you
+# want to lock them down, simply move the prefix under /api/admin or add an
+# explicit path pattern to the interceptor exclusion list.
+springdoc:
+  api-docs:
+    enabled: ${BLOG_OPENAPI_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${BLOG_OPENAPI_ENABLED:true}
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+    display-request-duration: true
+  default-produces-media-type: application/json
+  default-consumes-media-type: application/json
