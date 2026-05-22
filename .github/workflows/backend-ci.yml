@@ -1,0 +1,69 @@
+name: Backend CI
+
+# Runs on every PR (and on merges to main/master) that touches the backend
+# module. Frontend-only changes are skipped via the `paths` filter below.
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'blog-backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'blog-backend/**'
+      - '.github/workflows/backend-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# When a new commit is pushed to a branch with an in-flight run, cancel the
+# old one so we don't queue stale builds.
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: blog-backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          # The setup-java action caches ~/.m2/repository keyed on pom.xml hashes.
+          cache: maven
+
+      - name: Verify Docker is available
+        # Testcontainers (used by AbstractIntegrationTest) needs a working Docker
+        # daemon. ubuntu-latest runners ship with Docker preinstalled; this step
+        # surfaces a clear error if that ever changes.
+        working-directory: .
+        run: docker version
+
+      - name: Build, test and package
+        # `verify` runs compile + Surefire tests + Failsafe IT tests + packages
+        # the jar. -B is batch mode, -ntp suppresses transfer progress, -e adds
+        # stack traces on failure for easier triage.
+        run: mvn -B -e -ntp verify
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: |
+            blog-backend/target/surefire-reports/
+            blog-backend/target/failsafe-reports/
+          if-no-files-found: ignore
+          retention-days: 7
