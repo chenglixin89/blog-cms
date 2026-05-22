@@ -46,6 +46,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         seedAiData();
         backfillPublishedAt();
         insertDemoData();
+        addArticleFulltextIndex();
     }
 
     private void createAdminAccountTable() {
@@ -373,5 +374,35 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
 
     private String defaultText(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    /**
+     * Adds a FULLTEXT index on {@code blog_article (title, summary, content)} so the keyword
+     * search path can switch from {@code LIKE '%k%'} (which scans every row of the LONGTEXT
+     * column) to {@code MATCH ... AGAINST}.
+     *
+     * <p>The index is built {@code WITH PARSER ngram} so it works for Chinese as well as
+     * English. Server-wide tokenisation size lives in MySQL's {@code ngram_token_size}
+     * variable; with the default of 2, queries shorter than 2 characters cannot be indexed
+     * and the mapper falls back to LIKE for them. See ArticleMapper for that fallback.</p>
+     *
+     * <p>Idempotent via {@code information_schema.statistics}; safe to call on every boot.</p>
+     */
+    private void addArticleFulltextIndex() {
+        Integer count = jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(*)
+            FROM information_schema.statistics
+            WHERE table_schema = DATABASE()
+              AND table_name = 'blog_article'
+              AND index_name = 'ft_blog_article_search'
+            """,
+            Integer.class
+        );
+        if (count == null || count == 0) {
+            jdbcTemplate.execute(
+                "CREATE FULLTEXT INDEX ft_blog_article_search ON blog_article (title, summary, content) WITH PARSER ngram"
+            );
+        }
     }
 }
