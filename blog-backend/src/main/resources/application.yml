@@ -1,22 +1,28 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 spring:
   application:
     name: blog-backend
+  # When SPRING_PROFILES_ACTIVE is not set, fall back to the dev profile so that
+  # local development still works out of the box. Production deployments MUST
+  # set SPRING_PROFILES_ACTIVE=prod (and provide application-prod.yml or env vars).
+  profiles:
+    default: dev
   datasource:
-    url: jdbc:mysql://localhost:3306/blog_cms?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: root
-    password: 123456
+    url: ${BLOG_DB_URL:jdbc:mysql://localhost:3306/blog_cms?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${BLOG_DB_USERNAME:root}
+    # No default password on purpose: dev profile supplies one, prod must set BLOG_DB_PASSWORD.
+    password: ${BLOG_DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
   sql:
     init:
-      mode: always
+      mode: ${BLOG_SQL_INIT_MODE:always}
       schema-locations: classpath:schema.sql
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      max-file-size: ${BLOG_UPLOAD_MAX_FILE_SIZE:10MB}
+      max-request-size: ${BLOG_UPLOAD_MAX_REQUEST_SIZE:10MB}
 
 mybatis:
   configuration:
@@ -24,13 +30,18 @@ mybatis:
 
 blog:
   upload:
-    dir: uploads
+    dir: ${BLOG_UPLOAD_DIR:uploads}
+  cors:
+    # Comma-separated list. "*" only allowed in dev; prod must list real origins.
+    allowed-origins: ${BLOG_CORS_ALLOWED_ORIGINS:}
   auth:
     admin:
-      username: admin
-      password: "{noop}123456"
-      nickname: Admin
+      username: ${BLOG_ADMIN_USERNAME:admin}
+      # Raw (un-hashed) password used only when seeding a brand-new database.
+      # Existing accounts in blog_admin_account are NEVER overwritten.
+      password: ${BLOG_ADMIN_PASSWORD:}
+      nickname: ${BLOG_ADMIN_NICKNAME:Admin}
   jwt:
-    secret: "this-is-a-demo-secret-key-change-it-at-least-32-chars"
-    expire-seconds: 7200
-
+    # Must be at least 32 bytes (UTF-8). Validated at startup; see JwtTokenProvider.
+    secret: ${BLOG_JWT_SECRET:}
+    expire-seconds: ${BLOG_JWT_EXPIRE_SECONDS:7200}

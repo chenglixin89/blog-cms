@@ -8,20 +8,26 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
 
     private final String uploadDir;
+    private final String[] allowedOrigins;
 
-    public CorsConfig(@Value("${blog.upload.dir:uploads}") String uploadDir) {
+    public CorsConfig(
+        @Value("${blog.upload.dir:uploads}") String uploadDir,
+        @Value("${blog.cors.allowed-origins:}") String allowedOriginsCsv
+    ) {
         this.uploadDir = uploadDir;
+        this.allowedOrigins = parseAllowedOrigins(allowedOriginsCsv);
     }
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
-            .allowedOriginPatterns("*")
+            .allowedOriginPatterns(allowedOrigins)
             .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
             .allowedHeaders("*")
             .allowCredentials(false)
@@ -37,5 +43,16 @@ public class CorsConfig implements WebMvcConfigurer {
         }
         registry.addResourceHandler("/uploads/**")
             .addResourceLocations(uploadLocation);
+    }
+
+    private static String[] parseAllowedOrigins(String csv) {
+        if (csv == null || csv.isBlank()) {
+            // No origins configured: deny by default. Dev profile overrides this with "*".
+            return new String[0];
+        }
+        return Arrays.stream(csv.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .toArray(String[]::new);
     }
 }

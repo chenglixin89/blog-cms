@@ -107,9 +107,8 @@ public class AuthService {
         if (rawPassword == null || storedPassword == null || storedPassword.isBlank()) {
             return false;
         }
-        if (storedPassword.startsWith("{noop}")) {
-            return storedPassword.substring("{noop}".length()).equals(rawPassword);
-        }
+        // Plaintext {noop} passwords are no longer accepted at runtime. Any rows that still
+        // hold that legacy format are rehashed to BCrypt at startup by DatabaseMigrationRunner.
         return bCryptPasswordEncoder.matches(rawPassword, storedPassword);
     }
 

@@ -1,14 +1,24 @@
 package com.blog.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Map;
 
 @Component
 public class DatabaseMigrationRunner implements CommandLineRunner {
 
+    private static final Logger log = LoggerFactory.getLogger(DatabaseMigrationRunner.class);
+    private static final String NOOP_PREFIX = "{noop}";
+
     private final JdbcTemplate jdbcTemplate;
     private final AdminAuthProperties adminAuthProperties;
+    private final BCryptPasswordEncoder bCryptPasswordEncoder = new BCryptPasswordEncoder();
 
     public DatabaseMigrationRunner(JdbcTemplate jdbcTemplate, AdminAuthProperties adminAuthProperties) {
         this.jdbcTemplate = jdbcTemplate;
@@ -38,6 +48,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         addColumnIfMissing("blog_guestbook_message", "user_id", "ALTER TABLE blog_guestbook_message ADD COLUMN user_id BIGINT NULL AFTER parent_id");
         createAdminAccountTable();
         seedAdminAccount();
+        rehashLegacyAdminPasswords();
         createMediaAssetTable();
         createAuditLogTable();
         createAiTables();
@@ -63,20 +74,66 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             """);
     }
 
+    /**
+     * Seeds a default admin row when {@code blog_admin_account} is empty for the configured
+     * username. The configured password is BCrypt-hashed before being persisted; legacy
+     * {@code {noop}}-prefixed config values are stripped automatically.
+     */
     private void seedAdminAccount() {
+        String username = defaultText(adminAuthProperties.getUsername(), "admin");
         Integer count = jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM blog_admin_account WHERE username = ?",
             Integer.class,
-            defaultText(adminAuthProperties.getUsername(), "admin")
+            username
         );
-        if (count == null || count == 0) {
+        if (count != null && count > 0) {
+            return;
+        }
+
+        String configuredPassword = defaultText(adminAuthProperties.getPassword(), "");
+        String rawPassword = stripNoopPrefix(configuredPassword);
+        if (rawPassword.isBlank()) {
+            log.warn("Skipping default admin seeding: blog.auth.admin.password is blank. " +
+                "Set BLOG_ADMIN_PASSWORD or configure it in application-{profile}.yml.");
+            return;
+        }
+
+        jdbcTemplate.update(
+            "INSERT INTO blog_admin_account (username, password_hash, nickname) VALUES (?, ?, ?)",
+            username,
+            bCryptPasswordEncoder.encode(rawPassword),
+            defaultText(adminAuthProperties.getNickname(), "Admin")
+        );
+        log.info("Seeded default admin account '{}' with a BCrypt-hashed password.", username);
+    }
+
+    /**
+     * One-time migration: any admin row still using the legacy {@code {noop}<plain>} format
+     * is rehashed to BCrypt. This lets us drop {@code {noop}} support in {@code AuthService}
+     * without locking existing deployments out.
+     */
+    private void rehashLegacyAdminPasswords() {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+            "SELECT id, password_hash FROM blog_admin_account WHERE password_hash LIKE ?",
+            NOOP_PREFIX + "%"
+        );
+        if (rows.isEmpty()) {
+            return;
+        }
+        for (Map<String, Object> row : rows) {
+            Long id = ((Number) row.get("id")).longValue();
+            String legacyHash = (String) row.get("password_hash");
+            String raw = stripNoopPrefix(legacyHash);
+            if (raw.isBlank()) {
+                continue;
+            }
             jdbcTemplate.update(
-                "INSERT INTO blog_admin_account (username, password_hash, nickname) VALUES (?, ?, ?)",
-                defaultText(adminAuthProperties.getUsername(), "admin"),
-                defaultText(adminAuthProperties.getPassword(), "{noop}123456"),
-                defaultText(adminAuthProperties.getNickname(), "Admin")
+                "UPDATE blog_admin_account SET password_hash = ?, updated_at = NOW() WHERE id = ?",
+                bCryptPasswordEncoder.encode(raw),
+                id
             );
         }
+        log.info("Rehashed {} legacy '{}' admin password row(s) to BCrypt.", rows.size(), NOOP_PREFIX);
     }
 
     private void createMediaAssetTable() {
@@ -370,6 +427,13 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
                 0
             );
         }
+    }
+
+    private static String stripNoopPrefix(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.startsWith(NOOP_PREFIX) ? value.substring(NOOP_PREFIX.length()) : value;
     }
 
     private String defaultText(String value, String fallback) {
