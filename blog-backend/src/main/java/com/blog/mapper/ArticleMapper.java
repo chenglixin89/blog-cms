@@ -104,7 +104,10 @@ public interface ArticleMapper {
         FROM blog_article a
         LEFT JOIN blog_category c ON c.id = a.category_id AND c.is_deleted = 0
         WHERE a.is_deleted = 0 AND a.status = 1
-        <if test="keyword != null and keyword != ''">
+        <if test="keyword != null and keyword != '' and keyword.length() >= 2">
+          AND MATCH(a.title, a.summary, a.content) AGAINST(#{keyword})
+        </if>
+        <if test="keyword != null and keyword != '' and keyword.length() &lt; 2">
           AND (a.title LIKE CONCAT('%', #{keyword}, '%')
             OR a.summary LIKE CONCAT('%', #{keyword}, '%')
             OR a.content LIKE CONCAT('%', #{keyword}, '%'))
@@ -156,7 +159,10 @@ public interface ArticleMapper {
         SELECT COUNT(*)
         FROM blog_article a
         WHERE a.is_deleted = 0 AND a.status = 1
-        <if test="keyword != null and keyword != ''">
+        <if test="keyword != null and keyword != '' and keyword.length() >= 2">
+          AND MATCH(a.title, a.summary, a.content) AGAINST(#{keyword})
+        </if>
+        <if test="keyword != null and keyword != '' and keyword.length() &lt; 2">
           AND (a.title LIKE CONCAT('%', #{keyword}, '%')
             OR a.summary LIKE CONCAT('%', #{keyword}, '%')
             OR a.content LIKE CONCAT('%', #{keyword}, '%'))
