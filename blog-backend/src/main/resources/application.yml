@@ -34,3 +34,35 @@ blog:
     secret: "this-is-a-demo-secret-key-change-it-at-least-32-chars"
     expire-seconds: 7200
 
+
+# Spring Boot Actuator: expose only the read-only health and info endpoints under
+# /actuator. They live outside /api so they are not protected by the admin JWT
+# interceptor; this is intentional - external probes (k8s liveness, docker
+# healthcheck, uptime monitors) need to reach /actuator/health unauthenticated.
+# Sensitive endpoints (env, beans, mappings, ...) stay disabled by default.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /actuator
+  endpoint:
+    health:
+      # Hide the per-component breakdown by default. Detailed breakdown leaks
+      # information about which DB / cache / etc. failed; flip to "always" only
+      # in environments where the probe is authenticated.
+      show-details: never
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+
+info:
+  app:
+    name: blog-backend
+    description: Personal blog CMS backend
