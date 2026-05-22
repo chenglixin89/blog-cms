@@ -7,6 +7,7 @@ import { getFrontArticlePage, getFrontCategories, getFrontTags } from "../../api
 import type { Article } from "../../types/article";
 import { formatArticleDate } from "../../utils/articleDate";
 import type { Category, Tag } from "../../types/taxonomy";
+import { highlightKeyword } from "../../utils/sanitize";
 
 // sortOptions 定义搜索结果支持的排序方式。
 const sortOptions = ["relevance", "latest", "views", "likes", "comments"] as const;
@@ -69,15 +70,9 @@ const keywordSuggestions = computed(() => {
 
 const optionalNumber = (value: number | "all") => (value === "all" ? undefined : Number(value));
 
-// highlighted 把搜索关键词用 mark 标签高亮展示。
-const highlighted = (text: string) => {
-  const key = keyword.value.trim();
-  if (!key) {
-    return text;
-  }
-  const escaped = key.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
-  return text.replace(new RegExp("(" + escaped + ")", "gi"), "<mark>$1</mark>");
-};
+// highlighted 把搜索关键词用 mark 标签高亮展示，并先做 HTML 转义防止
+// 文章标题或摘要里的原始 HTML 在 v-html 渲染时执行。
+const highlighted = (text: string) => highlightKeyword(text, keyword.value);
 
 // loadHistory 从 localStorage 读取本地搜索历史。
 const loadHistory = () => {

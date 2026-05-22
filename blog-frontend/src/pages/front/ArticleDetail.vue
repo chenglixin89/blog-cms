@@ -21,6 +21,7 @@ import { getArticleDetail } from "../../api/article";
 import { useFrontUserStore } from "../../stores/frontUser";
 import type { Article } from "../../types/article";
 import { formatArticleDate, formatArticleDateTime, getArticleTimestamp } from "../../utils/articleDate";
+import { escapeHtml, safeUrl } from "../../utils/sanitize";
 import type { CommentItem, CommentPayload } from "../../types/comment";
 
 // ContentSegment 是把 Markdown 正文解析后的结构化片段，方便渲染标题、段落、引用、列表和代码块。
@@ -228,24 +229,8 @@ const formatDateTime = (value: string) =>
   });
 
 
-// escapeHtml 对用户内容做转义，降低 Markdown 渲染时的 XSS 风险。
-const escapeHtml = (value: string) =>
-  value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-
-// safeUrl 只允许 http、https、站内路径和锚点，避免危险链接进入页面。
-const safeUrl = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  if (/^(https?:\/\/|\/|#)/i.test(trimmed)) {
-    return escapeHtml(trimmed);
-  }
-  return "";
-};
+// escapeHtml 和 safeUrl 已抽到 src/utils/sanitize.ts，统一管控所有渲染入口。
+// 共享版本会拒绝 `//evil.com` 这类协议相对 URL，避免 Markdown 链接被引导到外部站点。
 
 const stripMarkdown = (value: string) =>
   value
