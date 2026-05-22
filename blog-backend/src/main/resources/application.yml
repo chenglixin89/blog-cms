@@ -33,6 +33,11 @@ blog:
   jwt:
     secret: "this-is-a-demo-secret-key-change-it-at-least-32-chars"
     expire-seconds: 7200
+  crypto:
+    # AES-256 key material. Hashed with SHA-256 to derive the actual key, so any
+    # >=32-byte UTF-8 string works. Override in production via BLOG_CRYPTO_SECRET;
+    # generate with `openssl rand -base64 48`.
+    secret: "this-is-a-demo-aes-256-secret-key-change-it-at-least-32-bytes-long"
 
 
 # OpenAPI / Swagger UI (springdoc). Documentation is generated automatically

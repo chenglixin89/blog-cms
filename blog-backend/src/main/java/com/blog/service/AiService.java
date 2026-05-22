@@ -1,5 +1,6 @@
 package com.blog.service;
 
+import com.blog.config.SymmetricCipher;
 import com.blog.dto.AiCallLogDetailResponse;
 import com.blog.dto.AiCallLogResponse;
 import com.blog.dto.AiProviderRequest;
@@ -42,14 +43,16 @@ public class AiService {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final AuditLogService auditLogService;
+    private final SymmetricCipher cipher;
     private final HttpClient httpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(15))
         .build();
 
-    public AiService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper, AuditLogService auditLogService) {
+    public AiService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper, AuditLogService auditLogService, SymmetricCipher cipher) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.auditLogService = auditLogService;
+        this.cipher = cipher;
     }
 
     public AiProviderResponse getProvider() {
@@ -70,7 +73,7 @@ public class AiService {
             """,
             normalizeText(request.getName(), "Xiaomi MiMo"),
             normalizeBaseUrl(request.getBaseUrl()),
-            apiKey,
+            cipher.encrypt(apiKey),
             normalizeText(request.getModel(), "mimo-v2.5-pro"),
             normalizeTemperature(request.getTemperature()),
             normalizeMaxTokens(request.getMaxTokens()),
@@ -652,7 +655,11 @@ public class AiService {
             return jdbcTemplate.queryForObject(
                 "SELECT id, name, base_url, api_key, model, temperature, max_tokens, enabled, updated_at FROM blog_ai_provider ORDER BY id ASC LIMIT 1",
                 (rs, rowNum) -> new AiProvider(
-                    rs.getLong("id"), rs.getString("name"), rs.getString("base_url"), rs.getString("api_key"), rs.getString("model"),
+                    rs.getLong("id"), rs.getString("name"), rs.getString("base_url"),
+                    // api_key is at-rest encrypted (AES-GCM, "enc1:..." prefix); legacy plaintext rows are
+                    // returned unchanged by SymmetricCipher.decrypt and rewritten on next startup.
+                    cipher.decrypt(rs.getString("api_key")),
+                    rs.getString("model"),
                     rs.getDouble("temperature"), rs.getInt("max_tokens"), rs.getInt("enabled"), rs.getObject("updated_at", LocalDateTime.class)
                 )
             );

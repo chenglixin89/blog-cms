@@ -1,18 +1,27 @@
 package com.blog.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
+import java.util.Map;
+
 @Component
 public class DatabaseMigrationRunner implements CommandLineRunner {
 
+    private static final Logger log = LoggerFactory.getLogger(DatabaseMigrationRunner.class);
+
     private final JdbcTemplate jdbcTemplate;
     private final AdminAuthProperties adminAuthProperties;
+    private final SymmetricCipher symmetricCipher;
 
-    public DatabaseMigrationRunner(JdbcTemplate jdbcTemplate, AdminAuthProperties adminAuthProperties) {
+    public DatabaseMigrationRunner(JdbcTemplate jdbcTemplate, AdminAuthProperties adminAuthProperties, SymmetricCipher symmetricCipher) {
         this.jdbcTemplate = jdbcTemplate;
         this.adminAuthProperties = adminAuthProperties;
+        this.symmetricCipher = symmetricCipher;
     }
 
     @Override
@@ -44,6 +53,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         addColumnIfMissing("blog_ai_call_log", "input_text", "ALTER TABLE blog_ai_call_log ADD COLUMN input_text LONGTEXT NULL AFTER skill_name");
         addColumnIfMissing("blog_ai_call_log", "output_text", "ALTER TABLE blog_ai_call_log ADD COLUMN output_text LONGTEXT NULL AFTER input_text");
         seedAiData();
+        encryptLegacyAiApiKeys();
         backfillPublishedAt();
         insertDemoData();
         addArticleFulltextIndex();
@@ -281,6 +291,33 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
                 code
             );
         }
+    }
+
+    /**
+     * One-shot migration that re-encrypts any AI provider rows whose
+     * {@code api_key} column still holds raw plaintext (i.e. predates the
+     * AES-GCM encryption introduced in this PR). After this runs once on a
+     * given database every row is in {@code "enc1:..."} format and the loop
+     * below becomes a no-op on subsequent boots.
+     */
+    private void encryptLegacyAiApiKeys() {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+            "SELECT id, api_key FROM blog_ai_provider WHERE api_key IS NOT NULL AND api_key <> '' AND api_key NOT LIKE ?",
+            SymmetricCipher.VERSION_PREFIX + "%"
+        );
+        if (rows.isEmpty()) {
+            return;
+        }
+        for (Map<String, Object> row : rows) {
+            Long id = ((Number) row.get("id")).longValue();
+            String plaintext = (String) row.get("api_key");
+            jdbcTemplate.update(
+                "UPDATE blog_ai_provider SET api_key = ?, updated_at = NOW() WHERE id = ?",
+                symmetricCipher.encrypt(plaintext),
+                id
+            );
+        }
+        log.info("Encrypted {} legacy plaintext blog_ai_provider.api_key row(s) to AES-GCM.", rows.size());
     }
 
     private void backfillPublishedAt() {
