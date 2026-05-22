@@ -1,5 +1,6 @@
 package com.blog.service;
 
+import com.blog.config.AdminAuthInterceptor;
 import com.blog.dto.AuditLogResponse;
 import com.blog.dto.PageResponse;
 import com.blog.entity.AuditLog;
@@ -62,6 +63,13 @@ public class AuditLogService {
         if (request == null) {
             return "admin";
         }
+        // Preferred path: AdminAuthInterceptor has already verified the token and exposed the username.
+        Object attr = request.getAttribute(AdminAuthInterceptor.ATTR_ADMIN_USERNAME);
+        if (attr instanceof String s && !s.isBlank()) {
+            return truncate(s, 80);
+        }
+        // Fallback for endpoints excluded from the interceptor (e.g. /api/admin/login still
+        // records an audit entry, but the JWT does not yet exist at that moment).
         String authorization = request.getHeader("Authorization");
         if (authorization == null || !authorization.startsWith("Bearer ")) {
             return "admin";

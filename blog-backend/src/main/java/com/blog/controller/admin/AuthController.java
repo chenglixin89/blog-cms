@@ -1,6 +1,7 @@
 package com.blog.controller.admin;
 
 import com.blog.common.ApiResponse;
+import com.blog.config.AdminAuthInterceptor;
 import com.blog.dto.AdminPasswordChangeRequest;
 import com.blog.dto.LoginRequest;
 import com.blog.dto.LoginResponse;
@@ -8,10 +9,9 @@ import com.blog.service.AuditLogService;
 import com.blog.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,11 +36,12 @@ public class AuthController {
 
     @PutMapping("/auth/password")
     public ApiResponse<Void> changePassword(
-        @RequestHeader(value = "Authorization", required = false) String authorization,
         @RequestBody @Valid AdminPasswordChangeRequest request,
         HttpServletRequest httpRequest
     ) {
-        authService.changePassword(authorization, request);
+        // The interceptor has already validated the JWT and stashed the username on the request.
+        String username = (String) httpRequest.getAttribute(AdminAuthInterceptor.ATTR_ADMIN_USERNAME);
+        authService.changePassword(username, request);
         auditLogService.record(httpRequest, "System", "Change password", "ADMIN", null, "Admin changed own password");
         return ApiResponse.ok(null);
     }

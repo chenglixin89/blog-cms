@@ -43,9 +43,22 @@ public class AuthService {
         return new LoginResponse(token, defaultText(credential.nickname(), adminAuthProperties.getNickname()));
     }
 
+    /**
+     * Changes the password of the currently authenticated admin.
+     *
+     * <p>The {@code username} is provided by {@link com.blog.config.AdminAuthInterceptor}, which has
+     * already validated the JWT before the controller was invoked.</p>
+     */
     @Transactional
-    public void changePassword(String authorization, AdminPasswordChangeRequest request) {
-        AdminCredential credential = requireCurrentAdmin(authorization);
+    public void changePassword(String username, AdminPasswordChangeRequest request) {
+        if (username == null || username.isBlank()) {
+            // Defensive guard: should never happen because the interceptor blocks unauthenticated calls.
+            throw new ResponseStatusException(UNAUTHORIZED, "Admin token is invalid");
+        }
+        AdminCredential credential = findCredential(username);
+        if (credential == null) {
+            throw new ResponseStatusException(UNAUTHORIZED, "Admin account not found");
+        }
         if (!matchesPassword(request.getOldPassword(), credential.passwordHash())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Old password is incorrect");
         }
@@ -58,30 +71,6 @@ public class AuthService {
             bCryptPasswordEncoder.encode(request.getNewPassword()),
             credential.username()
         );
-    }
-
-    private AdminCredential requireCurrentAdmin(String authorization) {
-        String token = extractBearerToken(authorization);
-        if (token.isBlank() || !jwtTokenProvider.isTokenValid(token)) {
-            throw new ResponseStatusException(UNAUTHORIZED, "Admin token is invalid");
-        }
-        String role = jwtTokenProvider.parseRole(token);
-        if (!ADMIN_ROLE.equals(role)) {
-            throw new ResponseStatusException(UNAUTHORIZED, "Admin token is invalid");
-        }
-        String username = jwtTokenProvider.parseUsername(token);
-        AdminCredential credential = findCredential(username);
-        if (credential == null) {
-            throw new ResponseStatusException(UNAUTHORIZED, "Admin account not found");
-        }
-        return credential;
-    }
-
-    private String extractBearerToken(String authorization) {
-        if (authorization == null || !authorization.startsWith("Bearer ")) {
-            return "";
-        }
-        return authorization.substring(7).trim();
     }
 
     private AdminCredential findCredential(String username) {
