@@ -33,19 +33,17 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
+            // The previous version cached every /api/* response for an hour
+            // with NetworkFirst. Two problems:
+            //   1. Admin endpoints (which are JWT-authenticated and carry
+            //      privileged content) ended up in the SW cache.
+            //   2. Even on the public surface, /api/front/favorites and
+            //      /api/front/likes return per-user data that other users on
+            //      the same browser must never see.
+            // Default-deny: nothing under /api is ever cached. Public read
+            // endpoints can opt back in selectively if perf becomes an issue.
             urlPattern: ({ url }) => url.pathname.startsWith("/api"),
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "api-cache",
-              networkTimeoutSeconds: 6,
-              cacheableResponse: {
-                statuses: [0, 200]
-              },
-              expiration: {
-                maxEntries: 80,
-                maxAgeSeconds: 60 * 60
-              }
-            }
+            handler: "NetworkOnly"
           },
           {
             urlPattern: ({ request }) => request.destination === "image",
