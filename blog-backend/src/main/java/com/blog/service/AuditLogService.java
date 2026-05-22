@@ -5,6 +5,7 @@ import com.blog.dto.PageResponse;
 import com.blog.entity.AuditLog;
 import com.blog.mapper.AuditLogMapper;
 import com.blog.utils.JwtTokenProvider;
+import com.blog.utils.SecretRedactor;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
 
@@ -49,7 +50,10 @@ public class AuditLogService {
             log.setAction(requiredText(action, "operate"));
             log.setTargetType(truncate(defaultText(targetType), 60));
             log.setTargetId(targetId);
-            log.setDetail(truncate(defaultText(detail), 1000));
+            // detail can be assembled from arbitrary upstream strings (e.g. AI provider error
+            // bodies). Mask any secret-shaped substring before it lands in a column that admins
+            // routinely browse.
+            log.setDetail(truncate(SecretRedactor.redact(defaultText(detail)), 1000));
             log.setIp(truncate(resolveIp(request), 64));
             log.setUserAgent(truncate(request == null ? "" : defaultText(request.getHeader("User-Agent")), 500));
             auditLogMapper.insert(log);

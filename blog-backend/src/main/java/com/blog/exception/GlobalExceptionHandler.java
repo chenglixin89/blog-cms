@@ -1,6 +1,7 @@
 package com.blog.exception;
 
 import com.blog.common.ApiResponse;
+import com.blog.utils.SecretRedactor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -31,7 +32,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusiness(ResponseStatusException ex) {
         HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
-        String reason = ex.getReason() == null ? "Request failed" : ex.getReason();
+        // The reason often includes upstream payload fragments (e.g. AI provider error bodies),
+        // which can contain echoed credentials. Redact known secret shapes before sending to the
+        // client.
+        String reason = SecretRedactor.redact(ex.getReason() == null ? "Request failed" : ex.getReason());
         return ResponseEntity.status(status).body(ApiResponse.fail(status.value(), reason));
     }
 

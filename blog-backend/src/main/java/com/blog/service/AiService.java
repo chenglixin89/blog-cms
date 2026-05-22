@@ -9,6 +9,7 @@ import com.blog.dto.AiSkillResponse;
 import com.blog.dto.AiSkillRunRequest;
 import com.blog.dto.AiSkillRunResponse;
 import com.blog.dto.PageResponse;
+import com.blog.utils.SecretRedactor;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -311,13 +312,18 @@ public class AiService {
             response = sendAiRequest(provider, payload);
         }
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IllegalStateException("AI provider returned HTTP " + response.statusCode() + ": " + truncate(response.body(), 500));
+            // Some providers echo the Authorization header back on a 4xx page; redact before the
+            // body becomes part of an exception message that flows into logs and the HTTP reply.
+            throw new IllegalStateException("AI provider returned HTTP " + response.statusCode() + ": "
+                + truncate(SecretRedactor.redact(response.body(), provider.apiKey()), 500));
         }
         JsonNode root = objectMapper.readTree(response.body());
         String content = extractAssistantContent(root).trim();
         if (content.isBlank()) {
             String finishReason = root.path("choices").path(0).path("finish_reason").asText("unknown");
-            throw new IllegalStateException("AI provider returned empty content (finish_reason=" + finishReason + "). Increase Max Tokens or shorten the article content. Raw: " + truncate(response.body(), 500));
+            throw new IllegalStateException("AI provider returned empty content (finish_reason=" + finishReason
+                + "). Increase Max Tokens or shorten the article content. Raw: "
+                + truncate(SecretRedactor.redact(response.body(), provider.apiKey()), 500));
         }
         JsonNode usage = root.path("usage");
         return new AiCallResult(content, new TokenUsage(
@@ -606,6 +612,12 @@ public class AiService {
     }
 
     private void recordLog(AiProvider provider, String skillCode, String skillName, String input, String output, String error, long elapsedMs, TokenUsage usage) {
+        // Defence in depth: input/output/error must not retain a credential even if a caller
+        // forgot to redact upstream. The provider's known api_key is also stripped via exact
+        // match so unknown-shape vendor keys are still scrubbed.
+        String safeInput = SecretRedactor.redact(defaultText(input), provider.apiKey());
+        String safeOutput = SecretRedactor.redact(defaultText(output), provider.apiKey());
+        String safeError = SecretRedactor.redact(truncate(error, 1000), provider.apiKey());
         jdbcTemplate.update(
             """
             INSERT INTO blog_ai_call_log (provider_name, model, skill_code, skill_name, input_text, output_text, input_preview, output_preview, success, error_message, elapsed_ms, prompt_tokens, completion_tokens, total_tokens)
@@ -615,12 +627,12 @@ public class AiService {
             provider.model(),
             skillCode,
             skillName,
-            defaultText(input),
-            defaultText(output),
-            truncate(input, PREVIEW_LIMIT),
-            truncate(output, PREVIEW_LIMIT),
+            safeInput,
+            safeOutput,
+            truncate(safeInput, PREVIEW_LIMIT),
+            truncate(safeOutput, PREVIEW_LIMIT),
             error == null || error.isBlank() ? 1 : 0,
-            truncate(error, 1000),
+            safeError == null ? "" : safeError,
             elapsedMs,
             usage.promptTokens(),
             usage.completionTokens(),
